@@ -129,3 +129,12 @@ body{
   background-attachment:fixed !important;
 }
 </style>
+
+<style>
+.coinfx{position:fixed;bottom:-60px;z-index:-1;pointer-events:none;color:#00ff9c;opacity:.15;text-shadow:0 0 12px #00ff9c;animation:up linear infinite}
+@keyframes up{to{transform:translateY(-120vh) rotate(360deg)}}
+</style>
+<script>
+var s=['₿','Ξ','₮','◎','₿','Ξ'];
+for(var i=0;i<14;i++){var c=document.createElement('span');c.className='coinfx';c.textContent=s[i%s.length];c.style.left=Math.random()*95+'vw';c.style.fontSize=(24+Math.random()*30)+'px';c.style.animationDuration=(15+Math.random()*20)+'s';c.style.animationDelay=(-Math.random()*30)+'s';document.body.appendChild(c);}
+</script>

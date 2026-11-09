@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signal Bot</title>
+<style>
+body{font-family:sans-serif;background:#111;color:#eee;padding:16px;text-align:center;margin:0}
+select{font-size:18px;padding:8px;border-radius:8px;margin:4px}
+#price{font-size:22px;margin-top:16px}
+#sig{font-size:52px;font-weight:bold;margin:16px}
+.BUY{color:#2ecc71}.SELL{color:#e74c3c}.WAIT{color:#f1c40f}
+#info{color:#aaa;font-size:15px}
+#plan{background:#1e1e1e;border-radius:12px;padding:14px;margin:16px auto;max-width:380px;font-size:18px;line-height:1.8;text-align:left}
+.g{color:#2ecc71}.r{color:#e74c3c}.y{color:#f1c40f}
+#chart{height:420px;margin:16px auto;max-width:700px;border-radius:12px;overflow:hidden}
+#legend{font-size:13px;color:#aaa}
+</style>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<h2>എന്റെ സിഗ്നൽ</h2>
+<select id="coin" onchange="load()">
+<option>BTCUSDT</option><option>ETHUSDT</option><option>BNBUSDT</option>
+<option>SOLUSDT</option><option>XRPUSDT</option>
+<option>RSRUSDT</option><option>BONKUSDT</option><option>PEPEUSDT</option>
+<option>SYRUPUSDT</option>
+</select>
+<br>
+<select id="tf" onchange="load()">
+<option value="15m">15 മിനിറ്റ്</option>
+<option value="30m">30 മിനിറ്റ്</option>
+<option value="1h" selected>1 മണിക്കൂർ</option>
+<option value="4h">4 മണിക്കൂർ</option>
+</select>
+<div id="price">ലോഡ് ചെയ്യുന്നു...</div>
+<div id="sig">...</div>
+<div id="plan"></div>
+<div id="info"></div>
+<h3>ലൈവ് ചാർട്ട്</h3>
+<div id="legend"><span class="g">▲ BUY</span> &nbsp; <span class="r">▼ SELL</span> &nbsp; <span style="color:#3498db">— MA20</span> &nbsp; <span style="color:#e67e22">— MA50</span></div>
+<div id="chart"></div>
+<p style="font-size:12px;color:#777">ഇത് ഉറപ്പുള്ള സിഗ്നലല്ല. ഓരോ മിനിറ്റിലും പുതുക്കും.</p>
+<script>
+function smaAt(c,i,n){let s=0;for(let j=i-n+1;j<=i;j++)s+=c[j];return s/n}
+function rsiAt(c,i,n=14){let g=0,l=0;for(let j=i-n+1;j<=i;j++){let d=c[j]-c[j-1];if(d>0)g+=d;else l-=d}if(l==0)return 100;return 100-100/(1+g/l)}
+function atr(k,n=14){let s=0;for(let i=k.length-n;i<k.length;i++){const h=+k[i][2],l=+k[i][3],pc=+k[i-1][4];s+=Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc))}return s/n}
+function f(x){return Number(x.toPrecision(5))}
+function sigAt(c,i){
+  const R=rsiAt(c,i),fast=smaAt(c,i,20),slow=smaAt(c,i,50);
+  if(R<30||(fast>slow&&R<45))return 'BUY';
+  if(R>70||(fast<slow&&R>55))return 'SELL';
+  return 'WAIT';
+}
+const el=document.getElementById('chart');
+const ch=LightweightCharts.createChart(el,{
+  layout:{background:{color:'#1e1e1e'},textColor:'#ccc'},
+  grid:{vertLines:{color:'#2a2a2a'},horzLines:{color:'#2a2a2a'}},
+  timeScale:{timeVisible:true,secondsVisible:false},
+  width:el.clientWidth,height:420
+});
+const candles=ch.addCandlestickSeries({upColor:'#2ecc71',downColor:'#e74c3c',borderVisible:false,wickUpColor:'#2ecc71',wickDownColor:'#e74c3c',priceFormat:{type:'price',precision:8,minMove:0.00000001}});
+const ma20=ch.addLineSeries({color:'#3498db',lineWidth:1,priceLineVisible:false});
+const ma50=ch.addLineSeries({color:'#e67e22',lineWidth:1,priceLineVisible:false});
+window.addEventListener('resize',()=>ch.applyOptions({width:el.clientWidth}));
+let lastKey='';
+async function load(){
+  const s=document.getElementById('coin').value;
+  const t=document.getElementById('tf').value;
+  try{
+    const r=await fetch('https://data-api.binance.vision/api/v3/klines?symbol='+s+'&interval='+t+'&limit=300');
+    const k=await r.json();
+    const c=k.map(x=>+x[4]);
+    const n=c.length-1;
+    const tz=19800;
+    const data=k.map(x=>({time:x[0]/1000+tz,open:+x[1],high:+x[2],low:+x[3],close:+x[4]}));
+    candles.setData(data);
+    const m20=[],m50=[],marks=[];
+    let prev='WAIT';
+    for(let i=50;i<=n;i++){
+      m20.push({time:data[i].time,value:smaAt(c,i,20)});
+      m50.push({time:data[i].time,value:smaAt(c,i,50)});
+      const sg=sigAt(c,i);
+      if(sg!=prev&&sg!='WAIT'){
+        marks.push(sg=='BUY'
+          ?{time:data[i].time,position:'belowBar',color:'#2ecc71',shape:'arrowUp',text:'BUY'}
+          :{time:data[i].time,position:'aboveBar',color:'#e74c3c',shape:'arrowDown',text:'SELL'});
+      }
+      prev=sg;
+    }
+    ma20.setData(m20);ma50.setData(m50);candles.setMarkers(marks);
+    const key=s+t;if(key!=lastKey){ch.timeScale().fitContent();lastKey=key}
+    const p=c[n],R=rsiAt(c,n),fast=smaAt(c,n,20),slow=smaAt(c,n,50),A=atr(k);
+    const sig=sigAt(c,n);
+    document.getElementById('price').textContent='വില: $'+f(p);
+    const se=document.getElementById('sig');se.textContent=sig;se.className=sig;
+    let plan='';
+    if(sig=='BUY'){
+      const sl=p-1.5*A,t1=p+1.5*A,t2=p+3*A;
+      plan='<span class="g">✅ വാങ്ങാം: $'+f(p)+'</span><br>'+
+           '<span class="g">🎯 ടാർഗറ്റ് 1 (പകുതി വിൽക്കുക): $'+f(t1)+'</span><br>'+
+           '<span class="g">🎯 ടാർഗറ്റ് 2 (ബാക്കി വിൽക്കുക): $'+f(t2)+'</span><br>'+
+           '<span class="r">🛑 സ്റ്റോപ്പ്-ലോസ് (ഇതിന് താഴെ പോയാൽ വിൽക്കുക): $'+f(sl)+'</span>';
+    }else if(sig=='SELL'){
+      plan='<span class="r">🔻 കയ്യിൽ ഈ കോയിൻ ഉണ്ടെങ്കിൽ വിൽക്കാം: $'+f(p)+'</span><br>'+
+           '<span class="y">പുതുതായി വാങ്ങരുത്.</span><br>'+
+           '<span class="y">വീണ്ടും വാങ്ങാൻ നോക്കാവുന്ന വില: $'+f(p-1.5*A)+'</span>';
+    }else{
+      plan='<span class="y">⏳ ഇപ്പോൾ ഒന്നും ചെയ്യേണ്ട.</span><br>'+
+           '<span class="y">വില $'+f(p-1.5*A)+' വരെ താഴ്ന്നാൽ ശ്രദ്ധിക്കുക.</span>';
+    }
+    document.getElementById('plan').innerHTML=plan;
+    document.getElementById('info').textContent='RSI: '+R.toFixed(1)+' | MA20: '+f(fast)+' | MA50: '+f(slow);
+  }catch(e){document.getElementById('sig').textContent='Error';}
+}
+load();setInterval(load,60000);
+</script>
+</body>
+</html>
